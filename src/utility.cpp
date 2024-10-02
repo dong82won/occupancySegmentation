@@ -27,6 +27,18 @@ std::vector<cv::Point> changeMatoPoint(cv::Mat &image)
     return edgePts;
 }
 
+cv::Mat changePointoMat(std::vector<cv::Point> src, int rows, int cols)
+{
+    cv::Mat temp = cv::Mat::zeros(cv::Size(rows, cols), CV_8UC1); 
+    for (size_t i =0; i<src.size(); i++)
+    {
+        int x = src[i].x;
+        int y = src[i].y; 
+        temp.at<uchar>(y, x) = 255;
+    }
+    return temp;
+}
+
 cv::Mat extractMat2Mat(cv::Mat &image, uchar pixel_value)
 {
     cv::Mat dst=cv::Mat::zeros(image.size(), CV_8UC1);

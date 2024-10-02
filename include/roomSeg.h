@@ -85,7 +85,6 @@ private:
 
   cv::Mat img_wall_;
   cv::Mat img_freespace_;
-
   
   Mat img_grid_; 
   Mat img_grid_skeletion_;
@@ -103,7 +102,7 @@ private:
   // cv::Mat img_segroom_;
   // cv::Mat img_label_;
 
-  std::vector<std::vector<cv::Point>> rooms_contours_;
+  std::vector<std::vector<cv::Point>> seg_contours_;
 
   cv::Vec4i findLongestLine(const std::vector<cv::Vec4i> &lines);  
   void zhangSuenThinning(const cv::Mat &src, cv::Mat &dst);
@@ -165,7 +164,7 @@ private:
   
   void makeRegionToBox();
   cv::Mat makeCorrectionRegion();
-  
+  void addGridPoints(vector<Point>& outputPoints, const Point& snappedPoint, int gridSize);
 
 
 public:
@@ -193,29 +192,21 @@ public:
   {
     return virtual_line_;
   }
- 
 
+  std::vector<std::vector<cv::Point>> getSegContours()
+  {
+    return seg_contours_; 
+  }
 
-  // cv::Mat getRotatedImage()
-  // {
-  //   return img_raw_rotated_;
-  // }
+  int getRotRows()
+  {
+    return rows_rot_;
+  }
 
-
-  // cv::Mat getLabelImage()
-  // {
-  //   return img_label_;
-  // }
-
-  // cv::Mat getSegImage()
-  // {
-  //   return img_segroom_;
-  // }
-
-  // std::vector<std::vector<cv::Point>> getRoomImage()
-  // {
-  //   return rooms_;
-  // }
+  int getRotCols()
+  {
+    return cols_rot_;
+  }
 
 
   void initialImageSetting();    
@@ -223,12 +214,10 @@ public:
   void extracTrajectorPts();
   void extractVirtualLine(double length_virtual_line = 21.0);
 
-
   // //void segmentationRegion();  
-  
-
 
   void segmentationRoom();
+  void gridSnapping2(const vector<Point>& inputPoints, vector<Point>& outputPoints, int gridSize);
 
 };
 

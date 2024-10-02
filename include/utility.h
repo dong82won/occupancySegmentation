@@ -12,6 +12,8 @@
 // // Custom comp
 cv::Scalar randomColor();
 std::vector<cv::Point> changeMatoPoint(cv::Mat &image);
+cv::Mat changePointoMat(std::vector<cv::Point> src, int rows, int cols);
+
 double calculateDistance(const cv::Point &p1, const cv::Point &p2);
 std::vector<cv::Point> sortPoints(const std::vector<cv::Point> &points);
 cv::Mat extractMat2Mat(cv::Mat &image, uchar pixel_value=128);
@@ -24,5 +26,5 @@ void drawingOutLineCircule(const cv::Mat &image,cv::Point circlesCenters, int ra
 
 double calculateSlope(const cv::Point& p1, const cv::Point& p2);
 void adjustLineSlope(cv::Point& p1, cv::Point& p2);
-  
+
 #endif 

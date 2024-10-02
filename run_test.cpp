@@ -18,7 +18,7 @@ int main()
     // std::cout << home_path << std::endl;
 
     // 이미지 파일 경로
-    cv::Mat img_raw = cv::imread(home_path + "/myStudyCode/RoomSegmentation/imgdb/occupancy_grid.png", cv::IMREAD_GRAYSCALE);    
+    cv::Mat img_raw = cv::imread(home_path + "/myWorkCode/occupancySegmentation/imgdb/occupancy_grid.png", cv::IMREAD_GRAYSCALE);    
     //cv::Mat img_raw = cv::imread(home_path + "/myStudyCode/RoomSegmentation/imgdb/caffe_map.pgm", cv::IMREAD_GRAYSCALE);
 
     if (img_raw.empty())
@@ -36,6 +36,8 @@ int main()
     std::vector<cv::Point> featurePts = rs.getFeaturePts();
 
     cv::Mat img_grid = rs.getImgGridSnapping();
+
+
     cv::Mat color_img_grid;
     cv::cvtColor(img_grid, color_img_grid, COLOR_GRAY2BGR);    
     for (const auto &pt : featurePts)
@@ -68,8 +70,66 @@ int main()
     
     rs.segmentationRoom();
     //std::vector<std::vector<cv::Point>> seg_room = rs.getRoomImage();
+    
+    std::vector<std::vector<cv::Point>> seg_contours = rs.getSegContours();
+    int rows_rot = rs.getRotRows();
+    int cols_rot = rs.getRotCols();
+
+    std::cout << "seg_contours_.size(): " << seg_contours.size() << std::endl;
+
+    cv::Mat img_seg = cv::Mat::zeros(cv::Size(cols_rot, rows_rot), CV_8UC1);    
+    for (size_t i =0; i < seg_contours.size(); i++)
+    {
+        std::cout << "[ " << i  << " ] " << seg_contours[i].size() << std::endl;
+
+        for (size_t j=0; j < seg_contours[i].size(); j++)        
+        {
+            // for (size_t p=0; p< seg_contours[i].size(); p++ )
+            // {
+            //     int x = seg_contours[i][p].x;
+            //     int y = seg_contours[i][p].y;
+            //     img_seg.at<uchar>(y, x) = 255; // 3x3 영역의 픽셀을 흰색으로 설정
+
+            // }
+            
+
+            
+            vector<Point> outputPoints;
+            rs.gridSnapping2(seg_contours[i], outputPoints, 3);
+            
+            for (size_t p=0; p<outputPoints.size(); p++)
+            {
+                int x = outputPoints[p].x;
+                int y = outputPoints[p].y;
+                img_seg.at<uchar>(y, x) = 255; // 3x3 영역의 픽셀을 흰색으로 설정
+
+                // // (y, x)를 중심으로 3x3 영역의 픽셀을 할당
+                // for (int dy = -1; dy <= 1; ++dy) {
+                //     for (int dx = -1; dx <= 1; ++dx) {
+                //         int newY = y + dy;
+                //         int newX = x + dx;
+
+                //         // 이미지 경계 내에 있는지 확인
+                //         if (newX >= 0 && newX < img_seg.cols && newY >= 0 && newY < img_seg.rows) {
+                //             img_seg.at<uchar>(newY, newX) = 255; // 3x3 영역의 픽셀을 흰색으로 설정
+                //         }
+                //     }
+                // }
+            }             
+        }
+    }
+    cv::imshow("img_seg...", img_seg);
+
+    std::cout << "img_grid.size(): " << img_grid.size() << std::endl;
+    std::cout << "img_seg.size() : " << img_seg.size() << std::endl;
+
+    cv::Mat test;
+    bitwise_xor(img_grid, img_seg, test);
+
+    cv::imshow("bitwise_xor...", test);
 
 
+        
 
     /*
     //std::vector<cv::Vec3b> colors(seg_room.size());

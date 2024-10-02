@@ -340,6 +340,35 @@ void ROOMSEG::gridSnapping(const Mat& inputImage, Mat& outputImage, int gridSize
     }
 }
 
+void ROOMSEG::addGridPoints(vector<Point>& outputPoints, const Point& snappedPoint, int gridSize) 
+{
+    int halfGrid = gridSize / 2;
+
+    // Iterate over a square area around the snapped point
+    for (int dy = -halfGrid; dy <= halfGrid; ++dy) {
+        for (int dx = -halfGrid; dx <= halfGrid; ++dx) {
+            Point newPoint(snappedPoint.x + dx, snappedPoint.y + dy);
+            // Add the point to the output vector
+            outputPoints.push_back(newPoint);
+        }
+    }
+}
+
+void ROOMSEG::gridSnapping2(const vector<Point>& inputPoints, vector<Point>& outputPoints, int gridSize) 
+{
+    outputPoints.clear(); // Clear the output points
+
+    // Iterate over every point in the input vector
+    for (const Point& p : inputPoints) {
+        // Calculate the closest snapped grid point
+        Point snappedPoint = calculateSnappedPoint(p, gridSize);        
+        // Add the snapped point and its surrounding grid points to the output vector
+        addGridPoints(outputPoints, snappedPoint, gridSize);
+    }
+}
+
+
+
 void ROOMSEG::makeGridSnappingContours(int length_contours, int gridSize)
 {
     Mat img_dilate;
@@ -911,7 +940,7 @@ cv::Mat ROOMSEG::makeCorrectionRegion()
 
     cv::imshow("img_freespace_", img_freespace_);
 
-  // 3. 레이블링 작업을 수행합니다 (8방향 연결).
+    // 레이블링 작업을 수행합니다 (8방향 연결).
     cv::Mat labels, stats, centroids;    
     int n_labels = cv::connectedComponentsWithStats(img_freespace_, labels, stats, centroids, 4, CV_32S);
     
@@ -920,7 +949,7 @@ cv::Mat ROOMSEG::makeCorrectionRegion()
     std::cout <<"=============================" <<std::endl;
 
     std::vector<cv::Vec3b> colors(n_labels);
-   // 각 라벨에 무작위 색상 할당 (외곽선을 그리기 전 사용)    
+    // 각 라벨에 무작위 색상 할당 (외곽선을 그리기 전 사용)    
     for (int i = 1; i < n_labels; i++) {
         colors[i] = cv::Vec3b(rand() % 256, rand() % 256, rand() % 256);
     }
@@ -963,14 +992,24 @@ cv::Mat ROOMSEG::makeCorrectionRegion()
             // 외곽선 좌표 저장할 벡터
             std::vector<std::vector<cv::Point>> contours;
             std::vector<cv::Vec4i> hierarchy;
+
+
             // 외곽선 추출 (mask에서)
-            cv::findContours(mask, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-
-
-            cv::drawContours(color_img_label, contours, -1, colors[label], 1);
+            cv::findContours(mask, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
+            
+            std::vector<cv::Point> temp_seg;            
+            for (size_t i = 0; i < contours.size(); i++)
+            {
+                for (size_t j=0; j< contours[i].size(); j++)
+                {
+                    temp_seg.push_back(contours[i][j]);
+                }
+            }
+            seg_contours_.push_back(temp_seg);
+            cv::drawContours(color_img_label, contours, -1, colors[label], -1);
         }        
     }
+
     std::cout << "regions_box_: " << regions_box_.size() << std::endl;
     std::cout <<"=============================" <<std::endl;
 
@@ -1027,9 +1066,6 @@ void ROOMSEG::segmentationRoom()
 {
     //makeRegionToBox();    
     cv::Mat img_contour = makeCorrectionRegion();
-
-
-
 
 
 //     cv::Mat img_seg = makeRotatedReturn(img_contour);
