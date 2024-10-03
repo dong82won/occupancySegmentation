@@ -185,7 +185,7 @@ void drawingOutLineCircule(const cv::Mat &image, cv::Point circlesCenters, int r
     {
         cv::Point start = edgePoints[i];
         cv::Point end = edgePoints[(i + 1) % edgePoints.size()]; // 마지막 점과 첫 점을 연결
-        cv::line(image, start, end, cv::Scalar(255, 0, 0), 1);       // 파란색으로 실선 그리기
+        cv::line(image, start, end, cv::Scalar(0, 255, 255), 1);       // 파란색으로 실선 그리기
     }
 }
 
@@ -194,34 +194,47 @@ double calculateSlope(const cv::Point& p1, const cv::Point& p2) {
     if (p1.x == p2.x) {
         return std::numeric_limits<double>::infinity();  // X 좌표가 같으면 기울기는 무한대
     }
-    return static_cast<double>(p2.y - p1.y) / (p2.x - p1.x);
+    return static_cast<double>(p2.y - p1.y) / static_cast<double>(p2.x - p1.x);
 }
 
 // 기울기를 90도 또는 180도로 조정하는 함수
-void adjustLineSlope(cv::Point& p1, cv::Point& p2) {
+void adjustLineSlope(cv::Point& p1, cv::Point& p2, int rows, int cols) 
+{
     
-    double slope = calculateSlope(p1, p2);
-
-    std::cout << "slope: " << slope << std::endl;
-
-    // 기울기가 90도에 가까우면 (수직선)
-    if (std::isinf(slope) || std::abs(slope) > 1000) {
-        // std::cout << "기울기가 90도에 가까우므로 수직으로 조정합니다." << std::endl;    
-        // int mean_y = round((p1.y + p2.y)/2);        
-        // p1.y = mean_y;  // 두 점의 Y 좌표를 같게 만들어 수평선으로 만듭니다.
-        // p2.y = mean_y;
-        
+    // 같은 점인지 확인
+    if (p1 == p2) {
+        std::cerr << "Error: 두 점이 동일합니다. 선 조정을 할 수 없습니다." << std::endl;
+        return;
     }
-    // 기울기가 0에 가까우면 (수평선, 즉 180도)
-    else {
-        
-        std::cout << "기울기가 180도에 가까우므로 수평으로 조정합니다." << std::endl;
+
+    // 좌표 값의 범위를 검사 (예시로 좌표 값의 범위를 0 ~ 10000으로 설정)
+    if (p1.x < 0 || p1.y < 0 || p2.x < 0 || p2.y < 0 || 
+        p1.x > cols-1 || p1.y > rows-1 || p2.x > cols-1 || p2.y > rows-1)
+    {
+        std::cerr << "Error: 좌표 값이 허용된 범위를 벗어났습니다." << std::endl;
+        return;
+    }
+
+    double slope = calculateSlope(p1, p2);
+    // 아크탄젠트를 이용해 라디안 값을 구한 후 각도로 변환 (라디안 -> 각도 변환: 180 / PI)
+    double angle = atan(slope) * (180.0 / M_PI);   
+    
+    if (std::isinf(slope) || abs(slope) <= 10) {
+        //수직        
+          
+        std::cout << "수직 - slope: " << slope << ", angle: " << angle << std::endl;
         int mean_x = round((p1.x + p2.x)/2);        
         p1.x = mean_x;   // 두 점의 X 좌표를 같게 만들어 수직선으로 만듭니다.
-        p2.x = mean_x;
+        p2.x = mean_x;                
+    }
+    else {        
+        //수평           
 
+        int mean_y = round((p1.y + p2.y)/2);
+        p1.y = mean_y;  // 두 점의 Y 좌표를 같게 만들어 수평선으로 만듭니다.
+        p2.y = mean_y;      
         
-
+        std::cout << "수평 - slope: " << slope << ", angle: " << angle << std::endl;
     }
 }
 

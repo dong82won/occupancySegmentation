@@ -12,6 +12,7 @@
 using namespace cv;
 using namespace std;
 
+//#define DEBUG
 
 
 struct LINEINFO
@@ -23,12 +24,8 @@ struct LINEINFO
     // 두 LINEINFO가 동일한지 비교하는 연산자
     bool operator==(const LINEINFO &other) const
     {
-        // 비교: 거리와 두 점의 위치가 동일한지 체크
-        return (distance == other.distance) &&
-          ((virtual_wll.first.x == other.virtual_wll.first.x && virtual_wll.first.y == other.virtual_wll.first.y &&
-            virtual_wll.second.x == other.virtual_wll.second.x && virtual_wll.second.y == other.virtual_wll.second.y) ||
-          (virtual_wll.first.x == other.virtual_wll.second.x && virtual_wll.first.y == other.virtual_wll.second.y &&
-            virtual_wll.second.x == other.virtual_wll.first.x && virtual_wll.second.y == other.virtual_wll.first.y));
+      return (virtual_wll == other.virtual_wll) || 
+              (virtual_wll.first == other.virtual_wll.second && virtual_wll.second == other.virtual_wll.first);    
     }
 };
 
@@ -81,7 +78,8 @@ private:
   int rows_rot_;
   int cols_rot_;
 
-  //cv::Mat rotationMatrix_;
+  cv::Mat rotationMatrix_;
+  cv::Mat re_rotationMatrix_;
 
   cv::Mat img_wall_;
   cv::Mat img_freespace_;
@@ -156,14 +154,14 @@ private:
 
   cv::Mat extractFreeSpaceElements(uchar thread_space_value = 200);
   
-  cv::Mat makeRotationMatrix();
-  cv::Mat makeRotatedImage(cv::Mat& img, cv::Mat rotationMatrix);
-  cv::Mat makeRotatedReturn(cv::Mat& img_src);  
+  void makeRotationMatrix();
+  cv::Mat makeRotatedImage(cv::Mat& img);
+  
 
   void makeGridSnappingContours(int length_contours=15, int gridSize=3);  
   
   void makeRegionToBox();
-  cv::Mat makeCorrectionRegion();
+  //cv::Mat makeCorrectionRegion();
   void addGridPoints(vector<Point>& outputPoints, const Point& snappedPoint, int gridSize);
 
 
@@ -214,10 +212,8 @@ public:
   void extracTrajectorPts();
   void extractVirtualLine(double length_virtual_line = 21.0);
 
-  // //void segmentationRegion();  
-
-  void segmentationRoom();
-  void gridSnapping2(const vector<Point>& inputPoints, vector<Point>& outputPoints, int gridSize);
+  cv::Mat makeRotatedReturn(cv::Mat& img_src);  
+  cv::Point rotatedPoint2Point(cv::Point src);
 
 };
 

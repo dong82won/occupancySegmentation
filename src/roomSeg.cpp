@@ -112,7 +112,7 @@ Vec4i ROOMSEG::findLongestLine(const vector<Vec4i> &lines)
     return longestLine;
 }
 
-cv::Mat ROOMSEG::makeRotationMatrix()
+void ROOMSEG::makeRotationMatrix()
 {
    // Canny 엣지 검출
     cv::Mat edges;
@@ -126,11 +126,14 @@ cv::Mat ROOMSEG::makeRotationMatrix()
     angle_ = atan2(longestLine[3] - longestLine[1], longestLine[2] - longestLine[0]) * 180.0 / CV_PI;
 
     Point2f center(cols_/2.0, rows_/2.0);
-    cv::Mat rotationMatrix = getRotationMatrix2D(center, angle_, 1.0);
+    
+    rotationMatrix_ = getRotationMatrix2D(center, angle_, 1.0);
+    std::cout << "1. rotationMatrix_.size() " << rotationMatrix_.size() << std::endl;
+
 
     // 회전 각도에 따른 새로운 가로 및 세로 크기 계산
-    double abs_cos = abs(rotationMatrix.at<double>(0, 0));
-    double abs_sin = abs(rotationMatrix.at<double>(0, 1));
+    double abs_cos = abs(rotationMatrix_.at<double>(0, 0));
+    double abs_sin = abs(rotationMatrix_.at<double>(0, 1));
     
     cols_rot_ = int(rows_* abs_sin + cols_ * abs_cos);
     rows_rot_ = int(rows_ * abs_cos + cols_ * abs_sin);
@@ -139,34 +142,60 @@ cv::Mat ROOMSEG::makeRotationMatrix()
     std::cout <<"rot_size: " << cols_rot_ <<",  " << rows_rot_ << std::endl;
 
     // 변환 행렬의 이동을 수정하여 이미지가 잘리지 않도록 설정
-    rotationMatrix.at<double>(0, 2) += (cols_rot_ / 2.0) - center.x;
-    rotationMatrix.at<double>(1, 2) += (rows_rot_ / 2.0) - center.y;
+    rotationMatrix_.at<double>(0, 2) += (cols_rot_ / 2.0) - center.x;
+    rotationMatrix_.at<double>(1, 2) += (rows_rot_ / 2.0) - center.y;
 
-    return rotationMatrix;
 }
 
 // 이미지 회전
-cv::Mat ROOMSEG::makeRotatedImage(cv::Mat& img, cv::Mat rotationMatrix)
+cv::Mat ROOMSEG::makeRotatedImage(cv::Mat& img)
 {       
+    
     cv::Mat img_rotated;
-    warpAffine(img, img_rotated, rotationMatrix, Size(cols_rot_, rows_rot_));
+    warpAffine(img, img_rotated, rotationMatrix_, Size(cols_rot_, rows_rot_));
     return img_rotated;
 }
 
 
 cv::Mat ROOMSEG::makeRotatedReturn(cv::Mat& img_src)
-{    
-
+{  
     cv::Point2f center(cols_rot_/2.0, rows_rot_/2.0);
-    cv::Mat rotationMatrix = getRotationMatrix2D(center, -angle_, 1.0);    
+    re_rotationMatrix_ = getRotationMatrix2D(center, -angle_, 1.0);    
     
     // 변환 행렬의 이동을 수정하여 이미지가 잘리지 않도록 설정
-    rotationMatrix.at<double>(0, 2) += (cols_ / 2.0) - center.x;
-    rotationMatrix.at<double>(1, 2) += (rows_ / 2.0) - center.y;
+    re_rotationMatrix_.at<double>(0, 2) += (cols_ / 2.0) - center.x;
+    re_rotationMatrix_.at<double>(1, 2) += (rows_ / 2.0) - center.y;
     
     cv::Mat img_dst;
-    warpAffine(img_src, img_dst, rotationMatrix, Size(cols_, rows_));
+    warpAffine(img_src, img_dst, re_rotationMatrix_, Size(cols_, rows_), cv::INTER_NEAREST);
     return img_dst;
+}
+
+cv::Point ROOMSEG::rotatedPoint2Point(cv::Point src)
+{  
+
+    // 포인트를 행렬로 변환
+    cv::Mat pointMat = (cv::Mat_<double>(3, 1) << src.x, src.y, 1.0);
+
+     // 회전 적용
+    cv::Mat rotatedPointMat = re_rotationMatrix_ * pointMat;    
+    // 회전된 포인트
+    cv::Point2f rotPt(rotatedPointMat.at<double>(0), rotatedPointMat.at<double>(1));
+
+
+//     std::cout << "rotationMatrix_.size() " << rotationMatrix_.size() << std::endl;
+//     cv::Mat inverseRotMat;
+//     cv::invert(rotationMatrix_, inverseRotMat); // 회전 행렬의 역행렬 계산
+
+//     cv::Point2f rotPt; // 원래 좌표를 저장할 변수
+//     // 역행렬을 사용하여 회전된 포인트를 원래 좌표로 변환
+//     cv::Mat pointMat = (cv::Mat_<double>(3, 1) << src.x, src.y, 1);
+//     cv::Mat restoredPointMat = inverseRotMat * pointMat;
+
+//     rotPt.x = (int)restoredPointMat.at<double>(0);
+//     rotPt.y = (int)restoredPointMat.at<double>(1);
+    
+    return rotPt;
 }
 
 
@@ -354,18 +383,18 @@ void ROOMSEG::addGridPoints(vector<Point>& outputPoints, const Point& snappedPoi
     }
 }
 
-void ROOMSEG::gridSnapping2(const vector<Point>& inputPoints, vector<Point>& outputPoints, int gridSize) 
-{
-    outputPoints.clear(); // Clear the output points
+// void ROOMSEG::gridSnapping2(const vector<Point>& inputPoints, vector<Point>& outputPoints, int gridSize) 
+// {
+//     outputPoints.clear(); // Clear the output points
 
-    // Iterate over every point in the input vector
-    for (const Point& p : inputPoints) {
-        // Calculate the closest snapped grid point
-        Point snappedPoint = calculateSnappedPoint(p, gridSize);        
-        // Add the snapped point and its surrounding grid points to the output vector
-        addGridPoints(outputPoints, snappedPoint, gridSize);
-    }
-}
+//     // Iterate over every point in the input vector
+//     for (const Point& p : inputPoints) {
+//         // Calculate the closest snapped grid point
+//         Point snappedPoint = calculateSnappedPoint(p, gridSize);        
+//         // Add the snapped point and its surrounding grid points to the output vector
+//         addGridPoints(outputPoints, snappedPoint, gridSize);
+//     }
+// }
 
 
 
@@ -378,16 +407,15 @@ void ROOMSEG::makeGridSnappingContours(int length_contours, int gridSize)
 
     cv::Mat img_skeletion; 
     zhangSuenThinning(img_dilate, img_skeletion);
-    //cv::imshow("img_wall_skeletion", img_skeletion);    
+    cv::imshow("img_wall_skeletion", img_skeletion);    
 
-    std::vector<cv::Point> skeletionPts = changeMatoPoint(img_skeletion);            
+    std::vector<cv::Point> skeletionPts = changeMatoPoint(img_skeletion);
     
     //연결된 성분을 저장할 벡터
     vector<vector<Point>> edgePts;
     findConnectedComponents(skeletionPts, edgePts);
 
-    cv::Mat img_edge = cv::Mat::zeros(img_skeletion.size(), CV_8UC1);        
-    
+    cv::Mat img_edge = cv::Mat::zeros(img_skeletion.size(), CV_8UC1);            
     for (size_t i = 0; i < edgePts.size(); i++)
     {       
         //contours threshold
@@ -547,9 +575,7 @@ std::vector<cv::Point> ROOMSEG::findPointsInRange(const std::vector<cv::Point> &
                                                 int x_min, int x_max, 
                                                 int y_min, int y_max)
 {
-
     std::vector<cv::Point> filteredPoints;
-
     // std::copy_if를 사용하여 조건에 맞는 점들만 필터링
     std::copy_if(points.begin(), points.end(), std::back_inserter(filteredPoints),
                 [x_min, x_max, y_min, y_max](const cv::Point &pt)
@@ -610,6 +636,7 @@ double ROOMSEG::pointToLineDistance(const cv::Point &p, const cv::Point &lineSta
 
     double dx = p.x - xx;
     double dy = p.y - yy;
+
     return std::sqrt(dx * dx + dy * dy);
 }
 
@@ -685,7 +712,7 @@ void ROOMSEG::buildDataBase()
         {                    
             mergeClosePoints(db.feturePoints, 3);
             // 거리 계산 함수 호출            
-            std::vector<LINEINFO> check_lines = checkPointsNearLineSegments(db.feturePoints, db.trajectoryPoints, 3);
+            std::vector<LINEINFO> check_lines = checkPointsNearLineSegments(db.feturePoints, db.trajectoryPoints, 2);
             lineInfo_.push_back(check_lines);
             ++i;            
         }        
@@ -727,7 +754,7 @@ void ROOMSEG::buildDataBaseTest(const cv::Mat& img_color_map)
             std::cout << "TrajectoryPts:";
             for (const auto &pt : db.trajectoryPoints)
             {
-                cv::circle(img_update, pt, 2, cv::Scalar(0, 255, 0), -1);
+                cv::circle(img_update, pt, 1, cv::Scalar(0, 255, 0), -1);
                 std::cout << "(" << pt.x << ", " << pt.y << ") ";
             };
             std::cout << std::endl;            
@@ -752,8 +779,6 @@ void ROOMSEG::buildDataBaseTest(const cv::Mat& img_color_map)
     }    
 }
 
-
-
 // std::vector<std::vector<LINEINFO>>를 std::vector<LINEINFO>로 변환하는 함수
 std::vector<LINEINFO> ROOMSEG::convertToLineInfo(const std::vector<std::vector<LINEINFO>> &a)
 {
@@ -772,9 +797,10 @@ void ROOMSEG::extractVirtualLine(double length_virtual_line)
 {    
     buildDataBase();
 
-    // cv::Mat color_img_raw_rotated;
-    // cv::cvtColor(img_raw_rotated_, color_img_raw_rotated, COLOR_GRAY2BGR);
-    // buildDataBaseTest(color_img_raw_rotated);    
+    // cv::Mat color_img_grid_;
+    // cv::cvtColor(img_grid_, color_img_grid_, COLOR_GRAY2BGR);
+    // buildDataBaseTest(color_img_grid_);    
+
 
     std::vector<LINEINFO> contvert_type = convertToLineInfo(lineInfo_);     
     std::cout << "contvert_type.size(): " << contvert_type.size() << std::endl;
@@ -783,16 +809,24 @@ void ROOMSEG::extractVirtualLine(double length_virtual_line)
     std::vector<LINEINFO> unique_lines = removeDuplicatesLines(contvert_type);    
     std::cout << "unique_lines.size(): " << unique_lines.size() << std::endl;
 
+    // for (const auto &line : unique_lines)
+    // {
+    //     std::cout << "Line: ("
+    //             << line.virtual_wll.first.x << ", " << line.virtual_wll.first.y << ") to ("
+    //             << line.virtual_wll.second.x << ", " << line.virtual_wll.second.y << ") - Distance: "
+    //             << line.distance << std::endl;
+    // }
+
     std::vector<LINEINFO> filtered_lines = fillterLine(unique_lines);
     std::cout << "filtered_lines.size(): " << filtered_lines.size() << std::endl;
 
-    for (const auto &line : filtered_lines)
-    {
-        std::cout << "Line: ("
-                << line.virtual_wll.first.x << ", " << line.virtual_wll.first.y << ") to ("
-                << line.virtual_wll.second.x << ", " << line.virtual_wll.second.y << ") - Distance: "
-                << line.distance << std::endl;
-    }
+    // for (const auto &line : filtered_lines)
+    // {
+    //     std::cout << "Line: ("
+    //             << line.virtual_wll.first.x << ", " << line.virtual_wll.first.y << ") to ("
+    //             << line.virtual_wll.second.x << ", " << line.virtual_wll.second.y << ") - Distance: "
+    //             << line.distance << std::endl;
+    // }
 
     // Output the filtered lines
     //for (const auto &line : filtered_lines)
@@ -811,7 +845,6 @@ void ROOMSEG::extractVirtualLine(double length_virtual_line)
 }
 
 
-
 // 중복되는 점과 점은 거리가 큰 것은 제거함
 //---------------------------------------------------------------------------
 // Check if two lines overlap based on their endpoints
@@ -827,25 +860,34 @@ bool ROOMSEG::linesOverlap(const LINEINFO &line1, const LINEINFO &line2)
 std::vector<LINEINFO> ROOMSEG::fillterLine(std::vector<LINEINFO> &lines)
 {
     std::vector<LINEINFO> result;
+    std::vector<bool> shouldRemove(lines.size(), false);
+
     for (size_t i = 0; i < lines.size(); ++i)
     {
-        bool toRemove = false;
+        if (shouldRemove[i])
+            continue; // 이미 제거 대상으로 마킹된 선은 건너뜁니다.
+
         for (size_t j = 0; j < lines.size(); ++j)
         {
             if (i != j && linesOverlap(lines[i], lines[j]))
             {
                 if (lines[i].distance > lines[j].distance)
                 {
-                    toRemove = true; // Mark for removal
+                    shouldRemove[i] = true; // 제거 대상으로 마킹
                     break;
+                }
+                else if (lines[i].distance == lines[j].distance)
+                {
+                    shouldRemove[j] = true; // 제거 대상으로 마킹
                 }
             }
         }
 
-        if (!toRemove)
+        if (!shouldRemove[i])
         {
-            result.push_back(lines[i]); // Keep line if it is not marked for removal
+            result.push_back(lines[i]); // 제거 대상으로 마킹되지 않은 선은 결과에 추가
         }
+
     }
     return result;
 }
@@ -854,31 +896,14 @@ std::vector<LINEINFO> ROOMSEG::fillterLine(std::vector<LINEINFO> &lines)
 // Function to check if two LINEINFO objects are equal regardless of the order of points
 bool ROOMSEG::areEqualIgnoringOrder(const LINEINFO &a, const LINEINFO &b)
 {
-    return (a.virtual_wll == b.virtual_wll) ||
-            (a.virtual_wll.first == b.virtual_wll.second && a.virtual_wll.second == b.virtual_wll.first);
+    return (a.virtual_wll == b.virtual_wll) || 
+            (a.virtual_wll.first == b.virtual_wll.second && a.virtual_wll.second == b.virtual_wll.first );
 }
 
 // Function to remove duplicates from a vector of LINEINFO
 std::vector<LINEINFO> ROOMSEG::removeDuplicatesLines(const std::vector<LINEINFO> &lines)
 {
-    std::set<LINEINFO, LineInfoComparator> uniqueLines;
-
-    for (const auto &line : lines)
-    {
-        bool isDuplicate = false;
-        for (const auto &uniqueLine : uniqueLines)
-        {
-            if (areEqualIgnoringOrder(line, uniqueLine))
-            {
-                isDuplicate = true;
-                break;
-            }
-        }
-        if (!isDuplicate)
-        {
-            uniqueLines.insert(line);
-        }
-    }
+    std::set<LINEINFO, LineInfoComparator> uniqueLines(lines.begin(), lines.end());
 
     // Convert back to vector
     return std::vector<LINEINFO>(uniqueLines.begin(), uniqueLines.end());
@@ -908,212 +933,27 @@ cv::Point ROOMSEG::findNearestBlackPoint(const cv::Mat& image, cv::Point center)
 }
 */
 
-void ROOMSEG::makeRegionToBox()
-{       
-
-
-}
-
-cv::Mat ROOMSEG::makeCorrectionRegion()
-{  
-
-    // cv::Mat img_contour;
-    // cv::bitwise_not(img_grid_, img_contour);
-    // cv::Mat img_virtual_line = img_contour.clone();
-
-    
-    for (size_t i=0; i<virtual_line_.size(); i++)
-    {
-
-        cv::Point spt = virtual_line_[i].virtual_wll.first;
-        cv::Point ept =  virtual_line_[i].virtual_wll.second;
-
-        cout <<"초기 좌표" << spt << ", " << ept << endl;
-        adjustLineSlope(spt, ept);
-        cout <<"수정 좌표" << spt << ", " << ept << endl;
-
-        //cv::line(img_freespace_,cv::Point(spt.x -2, spt.y +2), 
-        //                         cv::Point(ept.x +2, ept.y -2), 
-        //                         cv::Scalar(0), 2);                                 
-        cv::line(img_freespace_,spt, ept, cv::Scalar(0), 2); 
-    }
-
-    cv::imshow("img_freespace_", img_freespace_);
-
-    // 레이블링 작업을 수행합니다 (8방향 연결).
-    cv::Mat labels, stats, centroids;    
-    int n_labels = cv::connectedComponentsWithStats(img_freespace_, labels, stats, centroids, 4, CV_32S);
-    
-    std::cout <<"=============================" <<std::endl;
-    std::cout << "n_labels: " << n_labels << std::endl;
-    std::cout <<"=============================" <<std::endl;
-
-    std::vector<cv::Vec3b> colors(n_labels);
-    // 각 라벨에 무작위 색상 할당 (외곽선을 그리기 전 사용)    
-    for (int i = 1; i < n_labels; i++) {
-        colors[i] = cv::Vec3b(rand() % 256, rand() % 256, rand() % 256);
-    }
-    
-    cv::Mat color_img_grid_;
-    cvtColor(img_grid_, color_img_grid_, COLOR_GRAY2BGR);
-
-
-    cv::Mat color_img_label = cv::Mat::zeros(img_grid_.size(), CV_8UC3);    
-    for (int label = 1; label < n_labels; ++label)
-    {
-        // 바운딩 박스 좌표
-        int x = stats.at<int>(label, cv::CC_STAT_LEFT);
-        int y = stats.at<int>(label, cv::CC_STAT_TOP);
-        int width = stats.at<int>(label, cv::CC_STAT_WIDTH);
-        int height = stats.at<int>(label, cv::CC_STAT_HEIGHT);
-
-        cv::Rect box(x, y, width, height);
-        int box_size = width*height;
-        
-        if ( box_size > 9*9) 
-        {
-            // // 각 레이블의 픽셀에 색을 입힘
-            // for (int row = 0; row < labels.rows; row++) 
-            // {
-            //     for (int col = 0; col < labels.cols; col++) 
-            //     {
-            //         if (labels.at<int>(row, col) == label) 
-            //         {
-            //             color_img_contour.at<cv::Vec3b>(row, col) = colors[label];
-            //         }
-            //     }
-            // }            
-            
-            regions_box_.push_back(box);
-
-            // 라벨 마스크를 생성
-            cv::Mat mask = labels == label;
-            
-            // 외곽선 좌표 저장할 벡터
-            std::vector<std::vector<cv::Point>> contours;
-            std::vector<cv::Vec4i> hierarchy;
-
-
-            // 외곽선 추출 (mask에서)
-            cv::findContours(mask, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
-            
-            std::vector<cv::Point> temp_seg;            
-            for (size_t i = 0; i < contours.size(); i++)
-            {
-                for (size_t j=0; j< contours[i].size(); j++)
-                {
-                    temp_seg.push_back(contours[i][j]);
-                }
-            }
-            seg_contours_.push_back(temp_seg);
-            cv::drawContours(color_img_label, contours, -1, colors[label], -1);
-        }        
-    }
-
-    std::cout << "regions_box_: " << regions_box_.size() << std::endl;
-    std::cout <<"=============================" <<std::endl;
-
-    cv::imshow("color_img_label", color_img_label);
-
-    cv::Mat test;
-    add(color_img_label, color_img_grid_, test);
-    cv::imshow("test", test);
-
-
-    // for (int i =0; i< regions_box_.size(); i++)
-    // {
-    //     cv::Rect box = regions_box_[i];
-    //     std::cout << "box  : " << box << std::endl;
-    //     //cv::Point box_center = box.tl() + 0.5 * cv::Point(box.size());        
-    //     rectangle(img_contour, box, cv::Scalar(0), 3);
-    // }
-    // cv::imshow("img_contour1", img_contour);
-
-    // cv::floodFill(img_contour, cv::Point(5, 5), cv::Scalar(0));    
-    // cv::imshow("img_contour2", img_contour);
-
-    return color_img_label;
-}
-
 
 void ROOMSEG::initialImageSetting()
 {
     
-    cv::Mat img_freespace = extractFreeSpaceElements(160);
-    cv::imshow("extractFreeSpaceElements()...", img_freespace);
+    cv::Mat img_freespace = extractFreeSpaceElements(200);
+    //cv::imshow("extractFreeSpaceElements()...", img_freespace);
 
-    //cv::Mat img_wall = extractWallElements2(img_freespace);
-
-    int thread_wall_value = 50;    
+    int thread_wall_value = 64;    
     cv::Mat img_wall = extractWallElements(thread_wall_value);
-    cv::imshow("extractWallElements()...", img_wall);
+    //cv::imshow("extractWallElements()...", img_wall);
 
-    cv::Mat rotatioion_mat = makeRotationMatrix();
+    makeRotationMatrix();
 
-    img_wall_ = makeRotatedImage(img_wall, rotatioion_mat);
-    img_freespace_ = makeRotatedImage(img_freespace, rotatioion_mat);
+    img_wall_ = makeRotatedImage(img_wall);
+    img_freespace_ = makeRotatedImage(img_freespace);
 
-    cv::imshow("img_wall_...", img_wall_);
-    cv::imshow("img_freespace_...", img_freespace_);
+    // cv::imshow("img_wall_...", img_wall_);
+    // cv::imshow("img_freespace_...", img_freespace_);
 
-    int length_contours=15;
+    int length_contours = 5;
     int gridSize=3;
     makeGridSnappingContours(length_contours, gridSize);  
-}
-
-
-void ROOMSEG::segmentationRoom()
-{
-    //makeRegionToBox();    
-    cv::Mat img_contour = makeCorrectionRegion();
-
-
-//     cv::Mat img_seg = makeRotatedReturn(img_contour);
-//     cv::imshow("img_seg", img_seg);
-
-//     // 라벨링 결과 저장할 행렬 (labels)
-//     cv::Mat labels;
-//     int nLabels = cv::connectedComponents(img_seg, labels, 4, CV_32S);
-
-//     // 라벨링된 결과에서 외곽선을 추출하기 위한 결과 이미지 (컬러)
-//     cv::Mat img_label_ = cv::Mat::zeros(img_seg.size(), CV_8UC3);    
-//     std::vector<cv::Vec3b> colors(nLabels);
-//    // 각 라벨에 무작위 색상 할당 (외곽선을 그리기 전 사용)    
-//     for (int i = 1; i < nLabels; i++) {
-//         colors[i] = cv::Vec3b(rand() % 256, rand() % 256, rand() % 256);
-//     }
-    
-//     std::vector<cv::Point> segPts;
-//     // 각 라벨의 외곽선을 추출하여 출력하기
-//     for (int label = 1; label < nLabels; label++) {
-//         // 라벨 마스크를 생성
-//         cv::Mat mask = labels == label;
-//         // 외곽선 좌표 저장할 벡터
-//         std::vector<std::vector<cv::Point>> contours;
-//         std::vector<cv::Vec4i> hierarchy;
-
-//         // 외곽선 추출 (mask에서)
-//         cv::findContours(mask, contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
-
-//         cout <<"Label num: " << label << endl;
-//         cout <<"contours.size(): " << contours.size() << endl;
-//         for (int n = 0; n < contours.size(); n++)
-//         {
-//             cout <<"contours[" << n << "] = " << contours[n].size() << endl;            
-
-//             for (int m =0; m < contours[n].size(); m++)
-//             {
-//                 segPts.push_back(contours[n][m]);
-//             }            
-//         }
-//         rooms_contours_.push_back(segPts);
-
-//         // 외곽선을 색상과 함께 그리기
-//         cv::drawContours(img_label_, contours, -1, colors[label], -1);
-//     }
-
-//      // 결과 이미지 출력
-//     cv::imshow("Labeled Image", img_label_);
-
 }
 
