@@ -1,5 +1,5 @@
-#ifndef _ROOMSEG_H
-#define _ROOMSEG_H
+#ifndef _ROOMSEG2_H
+#define _ROOMSEG2_H
 
 #pragma once
 

@@ -55,14 +55,25 @@ cv::Mat extractMat2Mat(cv::Mat &image, uchar pixel_value)
     return dst;
 }
 
-
-
-
 // 거리 계산 함수
 double calculateDistance(const cv::Point &p1, const cv::Point &p2)
 {
     return sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
 }
+
+// 가까운 두 점 통합 함수 (평균값을 사용하여 통합)
+cv::Point mergePoints(const cv::Point& p1, const cv::Point& p2) {
+    return cv::Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+}
+
+// 선분의 중간점 계산 함수
+std::pair<cv::Point, cv::Point> mergeSegments(const std::pair<cv::Point, cv::Point>& seg1,
+                                            const std::pair<cv::Point, cv::Point>& seg2) {
+    cv::Point mid1 = (seg1.first + seg2.first) / 2;
+    cv::Point mid2 = (seg1.second + seg2.second) / 2;
+    return {mid1, mid2};
+}
+
 
 // 점들을 순차적으로 정렬하여 실선 재구성
 std::vector<cv::Point> sortPoints(const std::vector<cv::Point> &points)
@@ -197,45 +208,90 @@ double calculateSlope(const cv::Point& p1, const cv::Point& p2) {
     return static_cast<double>(p2.y - p1.y) / static_cast<double>(p2.x - p1.x);
 }
 
-// 기울기를 90도 또는 180도로 조정하는 함수
-void adjustLineSlope(cv::Point& p1, cv::Point& p2, int rows, int cols) 
-{
-    
-    // 같은 점인지 확인
-    if (p1 == p2) {
-        std::cerr << "Error: 두 점이 동일합니다. 선 조정을 할 수 없습니다." << std::endl;
-        return;
-    }
 
-    // 좌표 값의 범위를 검사 (예시로 좌표 값의 범위를 0 ~ 10000으로 설정)
-    if (p1.x < 0 || p1.y < 0 || p2.x < 0 || p2.y < 0 || 
-        p1.x > cols-1 || p1.y > rows-1 || p2.x > cols-1 || p2.y > rows-1)
-    {
-        std::cerr << "Error: 좌표 값이 허용된 범위를 벗어났습니다." << std::endl;
-        return;
-    }
 
-    double slope = calculateSlope(p1, p2);
-    // 아크탄젠트를 이용해 라디안 값을 구한 후 각도로 변환 (라디안 -> 각도 변환: 180 / PI)
-    double angle = atan(slope) * (180.0 / M_PI);   
-    
-    if (std::isinf(slope) || abs(slope) <= 10) {
-        //수직        
-          
-        std::cout << "수직 - slope: " << slope << ", angle: " << angle << std::endl;
-        int mean_x = round((p1.x + p2.x)/2);        
-        p1.x = mean_x;   // 두 점의 X 좌표를 같게 만들어 수직선으로 만듭니다.
-        p2.x = mean_x;                
-    }
-    else {        
-        //수평           
+// 근접한 선 성분을 찾아 평균값으로 갱신하는 함수
+void mergeCloseSegments(std::vector<std::pair<cv::Point, cv::Point>>& segments, double threshold) {
+    for (size_t i = 0; i < segments.size() - 1; ++i) {
+        for (size_t j = i + 1; j < segments.size(); ++j) {
+            
+            double dist1 = calculateDistance(segments[i].first, segments[j].first);
+            double dist2 = calculateDistance(segments[i].second, segments[j].second);
 
-        int mean_y = round((p1.y + p2.y)/2);
-        p1.y = mean_y;  // 두 점의 Y 좌표를 같게 만들어 수평선으로 만듭니다.
-        p2.y = mean_y;      
-        
-        std::cout << "수평 - slope: " << slope << ", angle: " << angle << std::endl;
+            std::cout << "dist1: " << dist1 << ", dist2: " << dist2 << std::endl;
+
+            // 두 선분이 일정 거리 이하로 가까운 경우 통합
+            if (dist1 <= threshold && dist2 <= threshold) {
+                
+                auto mergedSegment = mergeSegments(segments[i], segments[j]);
+                
+                segments[i] = mergedSegment;
+                // j번째 선분을 삭제
+                segments.erase(segments.begin() + j);
+                --j;  // 삭제 후 인덱스 조정
+
+                std::cout << "Merged segment " << i << " with " << j << ":\n";
+                std::cout << "New segment: [(" << mergedSegment.first.x << ", " << mergedSegment.first.y << "), ("
+                        << mergedSegment.second.x << ", " << mergedSegment.second.y << ")]\n";
+            }
+        }
     }
 }
 
+// 기울기를 90도 또는 180도로 조정하는 함수
+std::pair<cv::Point, cv::Point> adjustLineSlope(std::pair<cv::Point, cv::Point> lines, bool* state)
+{
 
+    cv::Point p1 = lines.first;
+    cv::Point p2 = lines.second;
+
+    std::pair<cv::Point, cv::Point> agjustline;
+
+    // 같은 점인지 확인
+    if (p1 == p2)
+    {
+        std::cerr << "Error: 두 점이 동일합니다. 선 조정을 할 수 없습니다." << std::endl;      
+        *state = 2;
+    }
+    else
+    {
+        // 좌표 값의 범위를 검사 (예시로 좌표 값의 범위를 0 ~ 10000으로 설정)
+
+        double slope = calculateSlope(p1, p2);
+        // 아크탄젠트를 이용해 라디안 값을 구한 후 각도로 변환 (라디안 -> 각도 변환: 180 / PI)
+        double angle = atan(slope) * (180.0 / M_PI);
+
+        if (abs(angle) >= 60.0)
+        {
+            // if (std::isinf(slope) || (abs(slope) <= 10 &&  abs(slope) > 0) ) {
+            *state = 0;
+            // 수직
+            std::cout << *state << " slope: " << abs(slope) << ", angle: " << abs(angle) << std::endl;
+            int mean_x = round((p1.x + p2.x) / 2);
+            
+            agjustline.first.x = mean_x;
+            agjustline.first.y = p1.y;
+
+            agjustline.second.x = mean_x;
+            agjustline.second.y = p2.y;
+        }
+        else if (abs(angle) <=30.0 )
+        {
+            // 수평
+            *state = 1;
+            std::cout << *state << " slope: " << abs(slope) << ", angle: " << abs(angle) << std::endl;
+            int mean_y = round((p1.y + p2.y) / 2);
+            
+            agjustline.first.x = p1.x;
+            agjustline.first.y = mean_y;
+
+            agjustline.second.x = p2.x;
+            agjustline.second.y = mean_y;
+        }
+        else 
+        {
+            *state = 2;
+        }
+    }
+    return agjustline;
+}

@@ -25,6 +25,6 @@ std::vector<cv::Point> edgePointsInCircle(const cv::Point &center, int radius);
 void drawingOutLineCircule(const cv::Mat &image,cv::Point circlesCenters, int radius);
 
 double calculateSlope(const cv::Point& p1, const cv::Point& p2);
-void adjustLineSlope(cv::Point& p1, cv::Point& p2, int rows, int cols);
-
+std::pair<cv::Point, cv::Point> adjustLineSlope(std::pair<cv::Point, cv::Point> lines, bool* state);
+void mergeCloseSegments(std::vector<std::pair<cv::Point, cv::Point>>& points, double threshold = 5.0);
 #endif 

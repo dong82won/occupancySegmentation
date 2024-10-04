@@ -15,11 +15,13 @@ MESSAGE(STATUS "PROJECT NAME: ${CMAKE_PROJECT_NAME}")
 find_package(OpenCV REQUIRED )  
 include_directories(include)
 
-file(GLOB SOURCES "src/*.cpp")
+#file(GLOB SOURCES "src/*.cpp")
+
+file(GLOB SOURCES src/roomSeg2.cpp src/utility.cpp)
 
 
 #add_executable(${CMAKE_PROJECT_NAME} test.cpp ${SOURCES})
-add_executable(${CMAKE_PROJECT_NAME} run_test.cpp ${SOURCES})
+add_executable(${CMAKE_PROJECT_NAME} run_test2.cpp ${SOURCES})
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC ${OpenCV_LIBS})  
 

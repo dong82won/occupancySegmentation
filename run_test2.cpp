@@ -6,7 +6,7 @@
 #include <cmath>
 
 //#include "utility.h"
-#include "roomSeg.h"
+#include "roomSeg2.h"
 
 using namespace cv;
 using namespace std;
