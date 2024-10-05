@@ -239,7 +239,7 @@ void mergeCloseSegments(std::vector<std::pair<cv::Point, cv::Point>>& segments, 
 }
 
 // 기울기를 90도 또는 180도로 조정하는 함수
-std::pair<cv::Point, cv::Point> adjustLineSlope(std::pair<cv::Point, cv::Point> lines, bool* state)
+std::pair<cv::Point, cv::Point> adjustLineSlope(std::pair<cv::Point, cv::Point> lines, int* state)
 {
 
     cv::Point p1 = lines.first;
@@ -255,43 +255,128 @@ std::pair<cv::Point, cv::Point> adjustLineSlope(std::pair<cv::Point, cv::Point> 
     }
     else
     {
-        // 좌표 값의 범위를 검사 (예시로 좌표 값의 범위를 0 ~ 10000으로 설정)
 
         double slope = calculateSlope(p1, p2);
         // 아크탄젠트를 이용해 라디안 값을 구한 후 각도로 변환 (라디안 -> 각도 변환: 180 / PI)
         double angle = atan(slope) * (180.0 / M_PI);
+        
 
-        if (abs(angle) >= 60.0)
-        {
-            // if (std::isinf(slope) || (abs(slope) <= 10 &&  abs(slope) > 0) ) {
-            *state = 0;
-            // 수직
-            std::cout << *state << " slope: " << abs(slope) << ", angle: " << abs(angle) << std::endl;
-            int mean_x = round((p1.x + p2.x) / 2);
-            
-            agjustline.first.x = mean_x;
-            agjustline.first.y = p1.y;
-
-            agjustline.second.x = mean_x;
-            agjustline.second.y = p2.y;
-        }
-        else if (abs(angle) <=30.0 )
+        if (abs(angle) <=30.0 )
         {
             // 수평
-            *state = 1;
-            std::cout << *state << " slope: " << abs(slope) << ", angle: " << abs(angle) << std::endl;
-            int mean_y = round((p1.y + p2.y) / 2);
-            
+            *state = 1; 
+            int mean_y = round((p1.y + p2.y) / 2);            
             agjustline.first.x = p1.x;
             agjustline.first.y = mean_y;
 
-            agjustline.second.x = p2.x;
+            agjustline.second.x = p2.x;            
             agjustline.second.y = mean_y;
+
+            std::cout << *state <<  " 수평 slope: " << abs(slope) << ", angle: " << abs(angle) << std::endl;
+            std::cout << agjustline.first <<", " <<agjustline.second << std::endl;
+        } 
+        else if (abs(angle) >= 60.0)
+        {
+            // if (std::isinf(slope) || (abs(slope) <= 10 &&  abs(slope) > 0) ) {
+            *state = 0;
+            // 수직           
+            
+            int mean_x = round((p1.x + p2.x) / 2);            
+            agjustline.first.x = mean_x;
+            agjustline.first.y = p1.y;
+            agjustline.second.x = mean_x;
+            agjustline.second.y = p2.y;
+
+            std::cout << *state << " 수직 slope: " << abs(slope) << ", angle: " << abs(angle) << std::endl;
+            std::cout << agjustline.first <<", " <<agjustline.second << std::endl;
+
         }
-        else 
+        else
         {
             *state = 2;
+            std::cerr << "수직-수평 기울기 범위 벗어남!" << std::endl;
+            // agjustline.first = p1;
+            // agjustline.second = p2;
+
+            // std::cout << *state << " slope: " << abs(slope) << ", angle: " << abs(angle) << std::endl;
+            // std::cout << agjustline.first <<", " <<agjustline.second << std::endl;          
+
         }
     }
+
     return agjustline;
 }
+
+// 엣지 테이블을 업데이트하는 함수
+void updateEdgeTable(const cv::Point& p1, const cv::Point& p2, std::vector<std::vector<Edge>>& edgeTable) {
+    if (p1.y == p2.y) return;  // 수평선은 무시
+
+    Edge edge;
+    if (p1.y < p2.y) {
+        edge.yMin = p1.y;
+        edge.yMax = p2.y;
+        edge.xOfYMin = p1.x;
+        edge.invSlope = static_cast<double>(p2.x - p1.x) / (p2.y - p1.y);
+    } else {
+        edge.yMin = p2.y;
+        edge.yMax = p1.y;
+        edge.xOfYMin = p2.x;
+        edge.invSlope = static_cast<double>(p1.x - p2.x) / (p1.y - p2.y);
+    }
+
+    edgeTable[edge.yMin].push_back(edge);
+}
+
+// 다각형 내부를 채우는 함수
+void fillPolygon(cv::Mat& image, const std::vector<cv::Point>& contour, const cv::Scalar& color) {
+    // 이미지 높이만큼 엣지 테이블을 생성
+    std::vector<std::vector<Edge>> edgeTable(image.rows);
+
+    // 외곽선을 따라 엣지 테이블을 업데이트
+    for (size_t i = 0; i < contour.size(); i++) {
+        const cv::Point& p1 = contour[i];
+        const cv::Point& p2 = contour[(i + 1) % contour.size()]; // 마지막 점에서 첫번째 점으로 연결
+        updateEdgeTable(p1, p2, edgeTable);
+    }
+
+    // 활성 엣지 목록
+    std::vector<Edge> activeEdges;
+
+    // 스캔 라인 알고리즘으로 다각형 내부를 채움
+    for (int y = 0; y < image.rows; y++) {
+        // 활성 엣지 목록을 업데이트
+        for (auto it = activeEdges.begin(); it != activeEdges.end();) {
+            if (it->yMax == y) {
+                it = activeEdges.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // 현재 스캔 라인에 교차하는 엣지 추가
+        activeEdges.insert(activeEdges.end(), edgeTable[y].begin(), edgeTable[y].end());
+
+        // 엑티브 엣지를 x값으로 정렬
+        std::sort(activeEdges.begin(), activeEdges.end(), [](const Edge& e1, const Edge& e2) {
+            return e1.xOfYMin < e2.xOfYMin;
+        });
+
+        // 교차하는 엣지들 사이의 구간을 채움
+        for (size_t i = 0; i < activeEdges.size(); i += 2) {
+            if (i + 1 >= activeEdges.size()) break;
+
+            int xStart = static_cast<int>(std::ceil(activeEdges[i].xOfYMin));
+            int xEnd = static_cast<int>(std::floor(activeEdges[i + 1].xOfYMin));
+
+            for (int x = xStart; x <= xEnd; x++) {
+                image.at<cv::Vec3b>(y, x) = cv::Vec3b(color[0], color[1], color[2]);
+            }
+        }
+
+        // x값 업데이트
+        for (auto& edge : activeEdges) {
+            edge.xOfYMin += edge.invSlope;
+        }
+    }
+}
+

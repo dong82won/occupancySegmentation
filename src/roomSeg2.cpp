@@ -1,4 +1,4 @@
-#include "roomSeg.h"
+#include "roomSeg2.h"
 
 ROOMSEG::ROOMSEG(cv::Mat img): img_raw_(img)
 {
@@ -50,7 +50,7 @@ cv::Mat ROOMSEG::extractWallElements2(cv::Mat& img_src)
     std::vector<std::vector<cv::Point>> contours;
     std::vector<cv::Vec4i> hierarchy;
     // 외곽선 추출 (mask에서)
-    cv::findContours(img_src, contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
+    cv::findContours(img_src, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
      // 외곽선을 그리기 위한 컬러 이미지로 변환
     cv::Mat colorImg;
@@ -67,40 +67,9 @@ cv::Mat ROOMSEG::extractWallElements2(cv::Mat& img_src)
     }
     // 이미지 출력
     cv::imshow("Contours", colorImg);
+    cv::imshow("Contours2", img_wall);
     
     return img_wall;
-}
-
-cv::Mat ROOMSEG::extractWallElements3()
-{   
-    cv::Mat img_wall = cv::Mat::zeros(img_raw_.size(), CV_8UC1);
-    
-    // cv::Mat img_edges;
-    // cv::Canny(img_raw_, img_edges, 120, 150);
-
-     // Sobel 결과를 저장할 변수
-    cv::Mat grad_x, grad_y;
-    cv::Mat abs_grad_x, abs_grad_y, img_edges;
-
-    // X축 방향 Sobel 필터 적용
-    cv::Sobel(img_raw_, grad_x, CV_16S, 1, 0, 3);  // X 방향 미분, 커널 크기: 3
-    // Y축 방향 Sobel 필터 적용
-    cv::Sobel(img_raw_, grad_y, CV_16S, 0, 1, 3);  // Y 방향 미분, 커널 크기: 3
-
-    // 결과를 절대값으로 변환하여 8비트 이미지로 변환
-    cv::convertScaleAbs(grad_x, abs_grad_x);
-    cv::convertScaleAbs(grad_y, abs_grad_y);
-
-    // 두 방향의 엣지를 가중치 0.5로 합산
-    cv::addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, img_edges);
-
-    // 이미지 출력
-    cv::imshow("img_edges", img_edges);
-    cv::Mat img_bin;
-    cv::threshold(img_edges, img_bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-    cv::imshow("img_bin", img_bin);
-    
-    return img_bin;
 }
 
 
@@ -180,17 +149,15 @@ void ROOMSEG::makeRotationMatrix()
 
 // 이미지 회전
 cv::Mat ROOMSEG::makeRotatedImage(cv::Mat& img)
-{       
-    
+{  
     cv::Mat img_rotated;
-    warpAffine(img, img_rotated, rotationMatrix_, Size(cols_rot_, rows_rot_));
+    warpAffine(img, img_rotated, rotationMatrix_, Size(cols_rot_, rows_rot_), cv::INTER_CUBIC);
     return img_rotated;
 }
 
 
-cv::Mat ROOMSEG::makeRotatedReturn(cv::Mat& img_src)
+cv::Mat ROOMSEG::returnRotatedImage(cv::Mat& img)
 {  
-    
 
     cv::Point2f center(cols_rot_/2.0, rows_rot_/2.0);
     re_rotationMatrix_ = getRotationMatrix2D(center, -angle_, 1.0);    
@@ -200,7 +167,7 @@ cv::Mat ROOMSEG::makeRotatedReturn(cv::Mat& img_src)
     re_rotationMatrix_.at<double>(1, 2) += (rows_ / 2.0) - center.y;
     
     cv::Mat img_dst;
-    warpAffine(img_src, img_dst, re_rotationMatrix_, Size(cols_, rows_), cv::INTER_NEAREST);
+    warpAffine(img, img_dst, re_rotationMatrix_, Size(cols_, rows_), cv::INTER_CUBIC);
     return img_dst;
 }
 
@@ -371,6 +338,7 @@ Point ROOMSEG::calculateSnappedPoint(const Point& pixel, int gridSize) {
 }
 
 void ROOMSEG::gridSnapping(const Mat& inputImage, Mat& outputImage, int gridSize) {
+
     outputImage = Mat::zeros(inputImage.size(), inputImage.type()); // 결과 이미지를 0으로 초기화
 
     // 이미지에서 모든 픽셀을 순회
@@ -430,28 +398,69 @@ void ROOMSEG::addGridPoints(vector<Point>& outputPoints, const Point& snappedPoi
 // }
 
 
+// void ROOMSEG::makeGridSnappingContours(int length_contours, int gridSize)
+// {
+//     // Mat img_dilate; 
+//     // Mat kernel = getStructuringElement(MORPH_RECT, Size(3, 3));
+//     // morphologyEx(img_wall_, img_dilate, MORPH_DILATE, kernel, Point(-1, -1), 1);
+//     // imshow("img_dilate", img_dilate);
+
+//     cv::Mat img_skeletion; 
+//     zhangSuenThinning(img_wall_, img_skeletion);
+//     cv::imshow("img_wall_skeletion", img_skeletion);    
+
+//     std::vector<cv::Point> skeletionPts = changeMatoPoint(img_skeletion);
+    
+//     //연결된 성분을 저장할 벡터
+//     vector<vector<Point>> edgePts;
+//     findConnectedComponents(skeletionPts, edgePts);
+
+//     cv::Mat img_edge = cv::Mat::zeros(img_skeletion.size(), CV_8UC1);            
+//     for (size_t i = 0; i < edgePts.size(); i++)
+//     {       
+//         //contours threshold
+//         if (edgePts[i].size() > length_contours)
+//         {
+//             for (const auto &pt : edgePts[i])
+//             { 
+//                 int y = pt.y;
+//                 int x = pt.x;
+//                 img_edge.at<uchar>(y, x) = 255;
+//             }
+//         }
+//     } 
+    
+//     gridSnapping(img_edge, img_grid_, gridSize);    
+//     zhangSuenThinning(img_grid_, img_grid_skeletion_);
+
+//     std::cout <<"makeGridSnappingContours()..." << std::endl;
+//     cv::imshow("img_grid_", img_grid_);
+//     cv::imshow("img_grid_skeletion_", img_grid_skeletion_);
+
+// }
+
 
 void ROOMSEG::makeGridSnappingContours(int length_contours, int gridSize)
-{
-    // Mat img_dilate; 
-    // Mat kernel = getStructuringElement(MORPH_RECT, Size(3, 3));
-    // morphologyEx(img_wall_, img_dilate, MORPH_DILATE, kernel, Point(-1, -1), 1);
-    // imshow("img_dilate", img_dilate);
+{ 
+    Mat img_dilate; 
+    Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, Size(3, 3));
+    cv::morphologyEx(img_wall_, img_dilate, cv::MORPH_CLOSE, kernel, Point(-1, -1), 1);     
+    cv::imshow("img_dilate", img_dilate);
 
     cv::Mat img_skeletion; 
-    zhangSuenThinning(img_wall_, img_skeletion);
-    cv::imshow("img_wall_skeletion", img_skeletion);    
+    zhangSuenThinning(img_dilate, img_skeletion);
+    cv::imshow("skeletion", img_skeletion); 
 
-    std::vector<cv::Point> skeletionPts = changeMatoPoint(img_skeletion);
+    /*
+    std::vector<cv::Point> skeletionPts = changeMatoPoint(img_skeletion); 
+    // //연결된 성분을 저장할 벡터
+    std::vector<std::vector<cv::Point>> edgePts;
+    findConnectedComponents(skeletionPts, edgePts);   
     
-    //연결된 성분을 저장할 벡터
-    vector<vector<Point>> edgePts;
-    findConnectedComponents(skeletionPts, edgePts);
-
-    cv::Mat img_edge = cv::Mat::zeros(img_skeletion.size(), CV_8UC1);            
+    cv::Mat img_edge = cv::Mat::zeros(img_wall_.size(), CV_8UC1);
     for (size_t i = 0; i < edgePts.size(); i++)
     {       
-        //contours threshold
+        // //contours threshold
         if (edgePts[i].size() > length_contours)
         {
             for (const auto &pt : edgePts[i])
@@ -462,14 +471,15 @@ void ROOMSEG::makeGridSnappingContours(int length_contours, int gridSize)
             }
         }
     } 
-    
-    gridSnapping(img_edge, img_grid_, gridSize);    
+    cv::imshow("img_edge2", img_edge);
+    */
+
+    gridSnapping(img_skeletion, img_grid_, gridSize);   
+    cv::imshow("img_grid_", img_grid_);
     zhangSuenThinning(img_grid_, img_grid_skeletion_);
 
-    std::cout <<"makeGridSnappingContours()..." << std::endl;
-    cv::imshow("img_grid_", img_grid_);
+    std::cout <<"makeGridSnappingContours()..." << std::endl;    
     cv::imshow("img_grid_skeletion_", img_grid_skeletion_);
-
 }
 
 
@@ -477,13 +487,18 @@ void ROOMSEG::extractFeaturePts()
 {
   // 수평선 감지
     cv::Mat horizontal;
-    cv::Mat horizontal_kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 1));
+    cv::Mat horizontal_kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(6, 1));
     cv::morphologyEx(img_grid_skeletion_, horizontal, cv::MORPH_OPEN, horizontal_kernel, cv::Point(-1, -1), 1);
 
     // 수직선 감지
     cv::Mat vertical;
-    cv::Mat vertical_kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1, 5));
+    cv::Mat vertical_kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1, 6));
     cv::morphologyEx(img_grid_skeletion_, vertical, cv::MORPH_OPEN, vertical_kernel, cv::Point(-1, -1), 1);
+    
+    cv::Mat img_edge;
+    cv::bitwise_or(horizontal, vertical, img_edge);    
+    cv::imshow("img_edge", img_edge);
+
 
     std::vector<cv::Point> horizontalPts = changeMatoPoint(horizontal);    
     vector<vector<Point>> edgeHorizontalPts;
@@ -513,8 +528,14 @@ void ROOMSEG::extractFeaturePts()
     }
 
     removeDuplicatePoints(featurePts);
-    mergeClosePoints(featurePts, 6);
+    //mergeClosePoints(featurePts, 3);
     featurePts_ = sortPoints(featurePts); 
+
+    
+    bitwise_not(img_grid_, inverted_grid_);    
+
+    //inverted_grid_ = makeRotatedReturn(inverted_grid); 
+    //cv::imshow("inverted_grid_", inverted_grid_);    
 
 }
 
@@ -865,11 +886,16 @@ void ROOMSEG::extractVirtualLine(double length_virtual_line)
     }
 
     // Output the filtered lines
-    //for (const auto &line : filtered_lines)
+    std::cout << "------------------------------------------------" << std::endl;    
     for (size_t i=0; i< filtered_lines.size(); i++)
     {        
         if (filtered_lines[i].distance < length_virtual_line)
         {
+            std::cout << "Line: ("
+                << filtered_lines[i].virtual_wll.first.x << ", " << filtered_lines[i].virtual_wll.first.y << ") to ("
+                << filtered_lines[i].virtual_wll.second.x << ", " << filtered_lines[i].virtual_wll.second.y << ") - Distance: "
+                << filtered_lines[i].distance << std::endl;
+
             virtual_line_.push_back(filtered_lines[i]);           
         }
     }
@@ -964,27 +990,122 @@ cv::Point ROOMSEG::findNearestBlackPoint(const cv::Mat& image, cv::Point center)
 }
 */
 
-
 void ROOMSEG::initialImageSetting()
 {
     
     cv::Mat img_freespace = extractFreeSpaceElements(200);
     
-    int thread_wall_value = 64;    
-    //cv::Mat img_wall = extractWallElements(thread_wall_value);    
-    cv::Mat img_wall = extractWallElements2(img_freespace); 
-    //cv::Mat img_wall = extractWallElements3();
+    int thread_wall_value = 64;
+    cv::Mat img_wall = extractWallElements(thread_wall_value);
+    //cv::Mat img_wall = extractWallElements2(img_freespace);     
 
     makeRotationMatrix();
 
     img_wall_ = makeRotatedImage(img_wall);
-    img_freespace_ = makeRotatedImage(img_freespace);
-
-    // cv::imshow("img_wall_...", img_wall_);
+    img_freespace_ = makeRotatedImage(img_freespace);    
+    
     // cv::imshow("img_freespace_...", img_freespace_);
-
     int length_contours = 5;
     int gridSize = 3;
     makeGridSnappingContours(length_contours, gridSize);  
+
 }
+
+std::vector<std::pair<cv::Point, cv::Point>> ROOMSEG::makeVirtualEdge(double length_line)
+{
+    extractVirtualLine();
+    std::cout << "vitualLines.size(): " << virtual_line_.size() << std::endl;
+
+    std::vector<std::pair<cv::Point, cv::Point>> vitual_edges;    
+    int state = 0;
+    for (const auto &edge : virtual_line_)
+    {   
+        std::pair<cv::Point, cv::Point> vl = adjustLineSlope(edge.virtual_wll, &state);         
+        if (state != 2) vitual_edges.push_back(vl); 
+    }    
+    if (virtual_line_.size() !=0) mergeCloseSegments(vitual_edges, 10);
+
+    std::cout << "vitual_edges.size(): " << vitual_edges.size() << std::endl;    
+    for (size_t i =0; i< vitual_edges.size(); i++ )
+    {
+        std::cout << vitual_edges[i].first <<", " << vitual_edges[i].second << std::endl;
+    }
+    return vitual_edges;
+}
+
+void ROOMSEG::makeFaceRegion(std::vector<cv::Point> featurePts, std::vector<std::pair<cv::Point, cv::Point>> vitual_edges)
+{    
+
+    std::vector<cv::Point> hull;
+    convexHull(featurePts, hull);    
+    
+    // Convex Hull 경계선을 그리기
+    for (size_t i = 0; i < hull.size(); i++) {
+        line(inverted_grid_, hull[i], hull[(i+1) % hull.size()], Scalar(0), 1);
+    }
+    for (size_t i = 0; i < vitual_edges.size(); i++)
+    {
+        line(inverted_grid_, vitual_edges[i].first, vitual_edges[i].second, Scalar(0), 1); 
+    }
+    //cv::Mat img_region_grid = rs.makeRotatedReturn(inverted_grid); 
+    cv::imshow("img_region_grid", inverted_grid_);
+
+}
+
+std::vector<std::vector<cv::Point>> ROOMSEG::extractFaceContours()
+{
+
+    // 레이블링 작업을 수행합니다 (8방향 연결).
+    cv::Mat labels, stats, centroids;    
+    int n_labels = cv::connectedComponentsWithStats(inverted_grid_, labels, stats, centroids, 8, CV_32S);
+        
+    cv::Mat labels_region = cv::Mat::zeros(inverted_grid_.size(), CV_8UC3);
+    labels_region.setTo(cv::Scalar(255, 255, 255));
+
+    
+    std::vector<std::vector<cv::Point>> regions;
+    
+    std::cout << "n_labels: " << n_labels << std::endl;
+    RNG rng(12345);  // 랜덤 색상을 위한 시드
+    for (int label = 1; label < n_labels; ++label)
+    {
+        cv::Vec3b color = Vec3b(rng.uniform(0, 256), rng.uniform(0, 256), rng.uniform(0, 256));
+        
+        std::vector<cv::Point> edge;
+        // 바운딩 박스 좌표
+        int x = stats.at<int>(label, cv::CC_STAT_LEFT);
+        int y = stats.at<int>(label, cv::CC_STAT_TOP);        
+        int area = stats.at<int>(label, CC_STAT_AREA);
+        
+        if (x >0 && y > 0)
+        {
+            if ( area > 15*15) 
+            {                 
+                // Create a binary mask for the current label
+                cv::Mat mask = (labels == label);
+
+                // Find contours in the mask
+                std::vector<std::vector<cv::Point>> contours;
+                std::vector<cv::Vec4i> hierarchy;
+                cv::findContours(mask, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+                // Draw contours for the current label on a new image                
+                cv::drawContours(labels_region, contours, -1, color, -1);                
+                
+                for (size_t i = 0; i<contours.size(); i++)
+                {
+                    for (size_t j = 0; j<contours[i].size(); j++)
+                    {
+                        edge.push_back(contours[i][j]); 
+                    }
+                }
+                regions.push_back(edge); 
+            }   
+        }
+    }    
+
+    cv::imshow("labels_region", labels_region);
+    
+    return regions;
+}
+
 

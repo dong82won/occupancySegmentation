@@ -84,7 +84,8 @@ private:
   cv::Mat img_wall_;
   cv::Mat img_freespace_;
   
-  Mat img_grid_; 
+  Mat img_grid_;
+  Mat inverted_grid_;  
   Mat img_grid_skeletion_;
 
   std::vector<cv::Point> featurePts_;  
@@ -93,15 +94,11 @@ private:
   std::vector<std::vector<LINEINFO>> lineInfo_;
   int radius_ = 20;
   std::vector<LINEINFO> virtual_line_;  
-  std::vector<cv::Rect> regions_box_;
 
-
-  //cv::Mat img_contour_;
-  // cv::Mat img_segroom_;
-  // cv::Mat img_label_;
-
+  //std::vector<cv::Rect> regions_box_;
   std::vector<std::vector<cv::Point>> seg_contours_;
 
+  cv::Mat makeRotatedImage(cv::Mat& img);
   cv::Vec4i findLongestLine(const std::vector<cv::Vec4i> &lines);  
   void zhangSuenThinning(const cv::Mat &src, cv::Mat &dst);
   void findConnectedComponents(const vector<Point> &contour, vector<vector<Point>> &components);
@@ -151,13 +148,11 @@ private:
 
   cv::Mat extractWallElements(uchar thread_wall_value = 64);  
   cv::Mat extractWallElements2(cv::Mat& img_src);
-  cv::Mat extractWallElements3();
+  
 
   cv::Mat extractFreeSpaceElements(uchar thread_space_value = 200);
   
   void makeRotationMatrix();
-  cv::Mat makeRotatedImage(cv::Mat& img);
-  
 
   void makeGridSnappingContours(int length_contours=15, int gridSize=3);  
   
@@ -176,6 +171,11 @@ public:
     return img_grid_; 
   }
 
+    cv::Mat getImgInvertedGridSnapping()  
+  {
+    return inverted_grid_; 
+  }
+
   std::vector<cv::Point> getFeaturePts()  
   {
     return featurePts_; 
@@ -187,10 +187,10 @@ public:
   }
   
 
-  std::vector<LINEINFO> getVirtualLines()
-  {
-    return virtual_line_;
-  }
+  // std::vector<LINEINFO> getVirtualLines()
+  // {
+  //   return virtual_line_;
+  // }
 
   std::vector<std::vector<cv::Point>> getSegContours()
   {
@@ -207,15 +207,21 @@ public:
     return cols_rot_;
   }
 
+  
 
   void initialImageSetting();    
   void extractFeaturePts();   
   void extracTrajectorPts();
   void extractVirtualLine(double length_virtual_line = 21.0);
 
-  cv::Mat makeRotatedReturn(cv::Mat& img_src);  
+  cv::Mat returnRotatedImage(cv::Mat& img_src);  
   cv::Point rotatedPoint2Point(cv::Point src);
 
+  std::vector<std::pair<cv::Point, cv::Point>> makeVirtualEdge(double length_line);
+  void makeFaceRegion(std::vector<cv::Point> featurePts, 
+                      std::vector<std::pair<cv::Point, cv::Point>> vitual_edges);
+  
+  std::vector<std::vector<cv::Point>> extractFaceContours();                      
 };
 
 

@@ -14,7 +14,7 @@ using namespace std;
 //------------------------------------------------------------------------------
 // 점 - vertex
 // 선 - edge
-// 면 - 
+// 면 - face
 //------------------------------------------------------------------------------
 int main()
 {
@@ -23,7 +23,7 @@ int main()
     // std::cout << home_path << std::endl;
 
     // 이미지 파일 경로
-    cv::Mat img_raw = cv::imread(home_path + "/myWorkCode/occupancySegmentation/imgdb/occupancy_grid.png", cv::IMREAD_GRAYSCALE);
+    cv::Mat img_raw = cv::imread(home_path + "/myStudyCode/occupancySegmentation/imgdb/occupancy_grid.png", cv::IMREAD_GRAYSCALE);
     //cv::Mat img_raw = cv::imread(home_path + "/myWorkCode/occupancySegmentation/imgdb/test_00.png", cv::IMREAD_GRAYSCALE);    
     //cv::Mat img_raw = cv::imread(home_path + "/myWorkCode/occupancySegmentation/imgdb/caffe_map.pgm", cv::IMREAD_GRAYSCALE);
 
@@ -32,6 +32,9 @@ int main()
         std::cerr << "Error: Unable to open image file: " << std::endl;
         return -1;
     }
+    cv::Mat color_img_raw;
+    cv::cvtColor(img_raw, color_img_raw, COLOR_GRAY2BGR);    
+
     imshow("img_raw", img_raw);
 
     ROOMSEG rs(img_raw);
@@ -39,30 +42,24 @@ int main()
 
     rs.extractFeaturePts();
     std::vector<cv::Point> featurePts = rs.getFeaturePts();
-    mergeClosePoints(featurePts, 6);
-
-    cv::Mat img_grid = rs.getImgGridSnapping();
-
-    cv::Mat inverted_grid;
-    bitwise_not(img_grid, inverted_grid);  
-    cv::imshow("inverted_grid", inverted_grid);
-
-    //중요 데이터
-    cv::Mat img_contours_grid = rs.makeRotatedReturn(inverted_grid); 
-    cv::imshow("img_contours_grid", img_contours_grid);
+    
+    cv::Mat img_grid = rs.getImgGridSnapping(); 
+    imshow("img_grid", img_grid);
 
     rs.extracTrajectorPts();    
     std::vector<cv::Point> trajectoryPts = rs.getTrajectoryPts();    
-
     
+    double length_line = 23.0;
+    std::vector<std::pair<cv::Point, cv::Point>> vitual_edges = rs.makeVirtualEdge(length_line);
+
 #ifdef DEBUG    
+
     cv::Mat color_img_grid;    
     cv::cvtColor(img_grid, color_img_grid, COLOR_GRAY2BGR);    
 
     for (const auto &pt : featurePts)
     {
-        cv::circle(color_img_grid, pt, 3, cv::Scalar(0, 255, 0), -1); 
-        //std::cout << pt << ", ";
+        cv::circle(color_img_grid, pt, 3, cv::Scalar(0, 255, 0), -1);         
     }
     std::cout << std::endl;
 
@@ -70,156 +67,70 @@ int main()
     {
         cv::circle(color_img_grid, pt, 1, cv::Scalar(255, 0, 0), -1);
     }
-#endif
 
-    double length_line = 23.0;
-    rs.extractVirtualLine(length_line);
-        
-    std::vector<LINEINFO> vitual_lines = rs.getVirtualLines();
-    std::cout << "vitualLines.size(): " << vitual_lines.size() << std::endl;    
-
-    std::vector<std::pair<cv::Point, cv::Point>> vlines;
-    for (const auto &line : vitual_lines)
+    for(size_t i = 0; i < vitual_edges.size(); i++)        
     {
-#ifdef DEBUG
-        // std::cout << "Line: ("
-        //         << line.virtual_wll.first.x << ", " << line.virtual_wll.first.y << ") to ("
-        //         << line.virtual_wll.second.x << ", " << line.virtual_wll.second.y << ") - Distance: "
-        //         << line.distance << std::endl;
-#endif       
-        bool state = 0;
-        std::pair<cv::Point, cv::Point> vl = adjustLineSlope(line.virtual_wll, &state); 
-        if (state != 2) vlines.push_back(vl);              
-
-        
-        if (state == 0) 
-        {
-            cv::line(color_img_grid, vl.first, vl.second, cv::Scalar(255, 0, 255), 1); 
-        }else if (state == 1)
-        {
-            cv::line(color_img_grid, vl.first, vl.second, cv::Scalar(0, 255, 255), 1); 
-        }        
-    }
-
-    if (vitual_lines.size() !=0) mergeCloseSegments(vlines, 10);
-    
-    // // Convex Hull 계산
-    // std::vector<cv::Point> hull;
-    // convexHull(featurePts, hull);    
-    // // Convex Hull 경계선을 그리기
-    // for (size_t i = 0; i < hull.size(); i++) {
-    //     line(inverted_grid, hull[i], hull[(i+1) % hull.size()], Scalar(0), 1);
-    // }
-
-    for (size_t i = 0; i < vlines.size(); i++)
-    {
-        line(inverted_grid, vlines[i].first, vlines[i].second, Scalar(0), 1); 
-    }
-
-#ifdef DEBUG
-
-    
+        cv::line(color_img_grid, vitual_edges[i].first, 
+                                vitual_edges[i].second, cv::Scalar(0, 0, 255), 3); 
+    }        
     cv::imshow("color_img_grid", color_img_grid);
 #endif
 
-
-    //----------------------------------------------------------------------------------------------
+    rs.makeFaceRegion(featurePts, vitual_edges);
+    std::vector<std::vector<cv::Point>> face = rs.extractFaceContours();
     
-    cv::Mat img_region_grid = rs.makeRotatedReturn(inverted_grid); 
-    cv::imshow("img_region_grid", img_region_grid);
+//------------------------------------------------------------------------------
+    cv::Mat img_r_grid = rs.returnRotatedImage(img_grid);
+    cv::imshow("img_r_grid", img_r_grid);
+    
+    cv::Mat imgc_r_grid;
+    cvtColor(img_r_grid, imgc_r_grid, COLOR_GRAY2BGR);
 
-    // 레이블링 작업을 수행합니다 (8방향 연결).
-    cv::Mat labels, stats, centroids;    
-    int n_labels = cv::connectedComponentsWithStats(img_region_grid, labels, stats, centroids, 4, CV_32S);
-        
-    cv::Mat labels_region = cv::Mat::zeros(img_region_grid.size(), CV_8UC3); 
-    labels_region.setTo(cv::Scalar(255, 255, 255));
+    cv::Mat img_result = cv::Mat::zeros(img_r_grid.size(), CV_8UC3);
+    img_result.setTo(cv::Scalar(255, 255, 255));
 
-    std::cout <<"=============================" <<std::endl;
-    std::cout << "n_labels: " << n_labels << std::endl;
-    std::cout <<"=============================" <<std::endl;
- 
-    RNG rng(12345);  // 랜덤 색상을 위한 시드
-    for (int label = 1; label < n_labels; ++label)
-    {
+    RNG rng(12345);
+    for (size_t i = 0; i< face.size(); i++)
+    {   
         cv::Vec3b color = Vec3b(rng.uniform(0, 256), rng.uniform(0, 256), rng.uniform(0, 256));
-        
-        // 바운딩 박스 좌표
-        int x = stats.at<int>(label, cv::CC_STAT_LEFT);
-        int y = stats.at<int>(label, cv::CC_STAT_TOP);
-        int width = stats.at<int>(label, cv::CC_STAT_WIDTH);
-        int height = stats.at<int>(label, cv::CC_STAT_HEIGHT);
-        int area = stats.at<int>(label, CC_STAT_AREA);
-
-        // std::cout << "  Bounding Box: x=" << x << ", y=" << y << ", width=" << width << ", height=" << height << std::endl;
-        // std::cout << "  Area: " << stats.at<int>(label, CC_STAT_AREA) << std::endl;
-
-        if (x >0 && y > 0)
+        //std::cout <<"face: " << i << std::endl;        
+                
+        std::vector<cv::Point> rotated_rpts;
+        for (size_t j=0; j<face[i].size(); j++)        
         {
-            if ( area > 15*15) 
-            {   
-                
-                // // 각 레이블의 픽셀에 색을 입힘
-                // for (int row = 0; row < labels.rows; row++) 
-                // {
-                //     for (int col = 0; col < labels.cols; col++) 
-                //     {
-                //         if (labels.at<int>(row, col) == label) 
-                //         {
-                //             img_result_color.at<cv::Vec3b>(row, col) = color;
-                //         }
-                //     }
-                // } 
-                
+            cv::Point pts= face[i][j];            
+            cv::Point rpt = rs.rotatedPoint2Point(pts); 
+            rotated_rpts.push_back(rpt);            
+        }
 
-                // Create a binary mask for the current label
-                cv::Mat mask = (labels == label);
-
-                // Find contours in the mask
-                std::vector<std::vector<cv::Point>> contours;
-                std::vector<cv::Vec4i> hierarchy;
-                cv::findContours(mask, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-                // Draw contours for the current label on a new image                
-                cv::drawContours(labels_region, contours, -1, color, -1);                
-            }   
-        }            
+        cv::fillPoly(img_result, rotated_rpts, color);         
+        // for (size_t j=0; j <rotated_rpts.size(); j++)
+        // {
+        //     cv::line(img_result, rotated_rpts[j], rotated_rpts[(j+1) % rotated_rpts.size()], color, 3);
+        // }
     }
-    cv::imshow("labels_region", labels_region);              
+
+    std::vector<cv::Point> edge = changeMatoPoint(img_r_grid);
+    for (size_t i = 0; i < edge.size(); i++)     
+    {
+        cv::circle(img_result, edge[i], 2, cv::Scalar(0, 0, 0), -1);
+    }    
+
+    for (size_t i = 0; i < vitual_edges.size(); i++)     
+    {
+        cv::Point spt = rs.rotatedPoint2Point(vitual_edges[i].first);
+        cv::Point ept = rs.rotatedPoint2Point(vitual_edges[i].second);
+        cv::line(img_result, spt, ept, cv::Scalar(0, 255, 0), 3); 
+    }
+
+    cv::imshow("img_result", img_result);
 
 
-    cv::Mat imgc_contours_grid;
-    cvtColor(img_contours_grid, imgc_contours_grid, COLOR_GRAY2BGR);
-    cv::imshow("imgc_contours_grid", imgc_contours_grid);       
-
-
+/*
     // 이미지 가로로 결합
     cv::Mat img_hcon_bottom;
     cv::hconcat(imgc_contours_grid, labels_region, img_hcon_bottom);
     cv::imshow("img_hcon_bottom", img_hcon_bottom);              
-
-
-    for (int i = 0; i < img_contours_grid.rows; i++)
-    {
-        for (int j=0; j< img_contours_grid.cols; j++)
-        {            
-            cv::Vec3b color = imgc_contours_grid.at<cv::Vec3b>(i, j); 
-            if (color[0] == 0 && color[1] == 0 && color[2] == 0)
-            {
-                labels_region.at<cv::Vec3b>(i, j) = cv::Vec3b(0, 0, 0);
-            }
-        }
-    }
-
-    for (size_t v = 0; v <vlines.size(); v++)     
-    {
-        cv::Point spt = rs.rotatedPoint2Point(vlines[v].first);
-        cv::Point ept = rs.rotatedPoint2Point(vlines[v].second);
-        cv::line(labels_region, spt, ept, cv::Scalar(0, 255, 255), 2); 
-    }
-    
-
-    cv::imshow("labels_region2", labels_region);    
 
 
     cv::Mat img_color_raw;    
@@ -243,21 +154,18 @@ int main()
     cv::imshow("img_combin2", img_combin2);      
     cv::imwrite( home_path + "/myWorkCode/occupancySegmentation//imgdb/regRoom2.png",  img_combin2);
 
-
-
-
+*/
     // Alpha blending을 위한 변수 설정 (투명도)
     double alpha = 0.5;  // 첫 번째 이미지의 가중치
     double beta = 1.0 - alpha;  // 두 번째 이미지의 가중치
 
     cv::Mat blended;
     // 두 이미지를 중첩합니다
-    cv::addWeighted(img_color_raw, alpha, labels_region, beta, 0.0, blended);
+    cv::addWeighted(color_img_raw, alpha, img_result, beta, 0.0, blended);
 
     // 결과 이미지를 출력합니다
     cv::namedWindow("Blended_Image", WINDOW_KEEPRATIO && WINDOW_AUTOSIZE);
     cv::imshow("Blended_Image", blended);
-
 
     cv::waitKey(0);
     return 0;
